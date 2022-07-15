@@ -104,6 +104,8 @@ void app_main(void)
   ble_svc_gap_device_name_set(device_name);
   nimble_port_freertos_init(host_task);
 
+  // Application Code
+  // TODO: Add FreeRTOS task example
   while (1)
   {
     ESP_LOGI("UPDATED", "V1");
