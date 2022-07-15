@@ -137,6 +137,7 @@ static void update_ota_control(uint16_t conn_handle)
 {
   struct os_mbuf *om;
   esp_err_t err;
+  ESP_LOGI(LOG_TAG_GATT_SVR, "update_ota_control: %d", gatt_svr_chr_ota_control_val);
 
   // check which value has been received
   switch (gatt_svr_chr_ota_control_val)
@@ -246,6 +247,9 @@ static int gatt_svr_chr_ota_control_cb(uint16_t conn_handle,
   int rc;
   uint8_t length = sizeof(gatt_svr_chr_ota_control_val);
 
+  // LOG RAW DATA
+  ESP_LOGI(LOG_TAG_GATT_SVR, "update_ota_control: %d", ctxt->op);
+
   switch (ctxt->op)
   {
   case BLE_GATT_ACCESS_OP_READ_CHR:
@@ -284,7 +288,7 @@ static int gatt_svr_chr_ota_data_cb(uint16_t conn_handle, uint16_t attr_handle,
                           gatt_svr_chr_ota_data_val, NULL);
 
   // LOG RAW DATA
-  ESP_LOG_BUFFER_HEX_LEVEL(LOG_TAG_GATT_SVR, gatt_svr_chr_ota_data_val, sizeof gatt_svr_chr_ota_data_val, ESP_LOG_INFO);
+  // ESP_LOG_BUFFER_HEX_LEVEL(LOG_TAG_GATT_SVR, gatt_svr_chr_ota_data_val, sizeof gatt_svr_chr_ota_data_val, ESP_LOG_INFO);
 
   // write the received packet to the partition
   if (updating)
@@ -310,8 +314,4 @@ void gatt_svr_init()
   ble_svc_gatt_init();
   ble_gatts_count_cfg(gatt_svr_svcs);
   ble_gatts_add_svcs(gatt_svr_svcs);
-  ESP_LOGI(LOG_TAG_GATT_SVR, "Request OTA: %x", SVR_CHR_OTA_CONTROL_REQUEST);
-  ESP_LOGI(LOG_TAG_GATT_SVR, "Request OTA ACK: %x", SVR_CHR_OTA_CONTROL_REQUEST_ACK);
-  ESP_LOGI(LOG_TAG_GATT_SVR, "OTA DONE: %x", SVR_CHR_OTA_CONTROL_DONE);
-  ESP_LOGI(LOG_TAG_GATT_SVR, "OTA DONE ACK: %x", SVR_CHR_OTA_CONTROL_DONE_ACK);
 }

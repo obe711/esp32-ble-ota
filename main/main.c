@@ -14,6 +14,8 @@
 #include "gap.h"
 #include "gatt_svr.h"
 #include "nvs_flash.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #define LOG_TAG_MAIN "main"
 
@@ -65,6 +67,14 @@ void app_main(void)
         esp_ota_mark_app_invalid_rollback_and_reboot();
       }
     }
+    else
+    {
+      ESP_LOGE(LOG_TAG_MAIN, "!PENDING_VERIFY");
+    }
+  }
+  else
+  {
+    ESP_LOGE(LOG_TAG_MAIN, "ota_atate error");
   }
 
   // Initialize NVS
@@ -93,4 +103,10 @@ void app_main(void)
   // set device name and start host task
   ble_svc_gap_device_name_set(device_name);
   nimble_port_freertos_init(host_task);
+
+  while (1)
+  {
+    ESP_LOGI("UPDATED", "V1");
+    vTaskDelay(500 / portTICK_RATE_MS);
+  }
 }
