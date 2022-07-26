@@ -108,7 +108,7 @@ void app_main(void)
   // TODO: Add FreeRTOS task example
   while (1)
   {
-    ESP_LOGI("UPDATED", "V1");
+    // ESP_LOGI("UPDATED", "V1");
     vTaskDelay(500 / portTICK_RATE_MS);
   }
 }
