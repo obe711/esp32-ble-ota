@@ -26,7 +26,7 @@ ESP32 BLE OTA boilerplate created with ESP-IDF v4.4.1 and the NimBLE stack.
 
 During the GAP connection process, the APP and ESP32 negotiate the maximum MTU size. The packet size is calculated based on the MTU size minus 3 bytes for ATT-related overhead. The APP writes the packet size to the OTA Data characteristic. The OTA process kicks off when the APP sends an OTA request to the OTA Control characteristic, to which the ESP32 responds with an acknowledgement.
 
-![OTA Update process Concept](docs/sequencediagram.png)
+![OTA Update process Concept](docs/APP_ESP32-Data-Chart.png)
 
 ### ESP32 code
 
