@@ -9,6 +9,8 @@
  *
  */
 
+#define RUN_APP 1
+
 #include "esp_log.h"
 #include "esp_ota_ops.h"
 #include "gap.h"
@@ -16,6 +18,8 @@
 #include "nvs_flash.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include "app.h"
+#include "fwhw.h"
 
 #define LOG_TAG_MAIN "main"
 
@@ -105,10 +109,7 @@ void app_main(void)
   nimble_port_freertos_init(host_task);
 
   // Application Code
-  // TODO: Add FreeRTOS task example
-  while (1)
-  {
-    ESP_LOGI("UPDATED", "V1");
-    vTaskDelay(500 / portTICK_RATE_MS);
-  }
+#if RUN_APP
+  run_app();
+#endif // RUN_APP
 }

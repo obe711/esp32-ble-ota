@@ -1,2 +1,2 @@
-idf_component_register(SRCS "gap.c" "gatt_svr.c" "main.c" 
-                    INCLUDE_DIRS ".")
+idf_component_register(SRCS "ble_notify.c" "gap.c" "gatt_svr.c" "app.c" "main.c"
+  INCLUDE_DIRS ".")

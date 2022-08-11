@@ -1,10 +1,14 @@
 #include "gatt_svr.h"
+#include "ble_notify.h"
+#include "fwhw.h"
 
 uint8_t gatt_svr_chr_ota_control_val;
 uint8_t gatt_svr_chr_ota_data_val[512];
+uint8_t gatt_svr_chr_app_data_val[512];
 
 uint16_t ota_control_val_handle;
 uint16_t ota_data_val_handle;
+uint16_t app_data_val_handle;
 
 const esp_partition_t *update_partition;
 esp_ota_handle_t update_handle;
@@ -12,8 +16,10 @@ bool updating = false;
 uint16_t num_pkgs_received = 0;
 uint16_t packet_size = 0;
 
-static const char *manuf_name = "Company 42";
-static const char *model_num = "ESP32";
+static const char *manuf_name = (char *)MANUF_NAME;
+static const char *model_num = (char *)MODEL_NUM;
+static const char *hardware_num = (char *)HARDWARE_NUM;
+static const char *fw_ver = (char *)FW_VER;
 
 static int gatt_svr_chr_write(struct os_mbuf *om, uint16_t min_len,
                               uint16_t max_len, void *dst, uint16_t *len);
@@ -27,11 +33,32 @@ static int gatt_svr_chr_ota_data_cb(uint16_t conn_handle, uint16_t attr_handle,
                                     struct ble_gatt_access_ctxt *ctxt,
                                     void *arg);
 
+static int gatt_svr_chr_app_cb(uint16_t conn_handle, uint16_t attr_handle,
+                               struct ble_gatt_access_ctxt *ctxt,
+                               void *arg);
+
 static int gatt_svr_chr_access_device_info(uint16_t conn_handle,
                                            uint16_t attr_handle,
                                            struct ble_gatt_access_ctxt *ctxt,
                                            void *arg);
 
+/* ---------------------------------------------------------------------------------- */
+
+/**
+ *
+ *   ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ╔═══════════════════════════════════════════════════════════════════════════════╗
+ * ║                                                                               ║
+ * ║  GATT CONFIGURATION                                                           ║
+ * ║                                                                               ║
+ * ╚═══════════════════════════════════════════════════════════════════════════════╝
+ *   ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ */
+
+/**
+ * @brief GATT server table.
+ */
 static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
     {// Service: Device Information
      .type = BLE_GATT_SVC_TYPE_PRIMARY,
@@ -51,9 +78,39 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
                  .flags = BLE_GATT_CHR_F_READ,
              },
              {
+                 // Characteristic: Hardware Revision
+                 .uuid = BLE_UUID16_DECLARE(GATT_HARDWARE_REVISION_UUID),
+                 .access_cb = gatt_svr_chr_access_device_info,
+                 .flags = BLE_GATT_CHR_F_READ,
+             },
+             {
+                 // Characteristic: Firmware Revision
+                 .uuid = BLE_UUID16_DECLARE(GATT_FIRMWARE_REVISION_UUID),
+                 .access_cb = gatt_svr_chr_access_device_info,
+                 .flags = BLE_GATT_CHR_F_READ,
+             },
+             {
                  0,
              },
          }},
+    {
+        // Service: APP
+        .type = BLE_GATT_SVC_TYPE_PRIMARY,
+        .uuid = &gatt_svr_svc_app_uuid.u,
+        .characteristics =
+            (struct ble_gatt_chr_def[]){
+                {
+                    // characteristic: App
+                    .uuid = &gatt_svr_chr_app_uuid.u,
+                    .access_cb = gatt_svr_chr_app_cb,
+                    .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE |
+                             BLE_GATT_CHR_F_NOTIFY,
+                    .val_handle = &app_data_val_handle,
+                },
+                {
+                    0,
+                }},
+    },
 
     {
         // service: OTA Service
@@ -86,6 +143,15 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
     },
 };
 
+/**
+ * @brief BLE Device Info callback
+ *
+ * @param conn_handle Connection handle
+ * @param attr_handle Attribute handle
+ * @param ctxt Context
+ * @param arg Arguments
+ * @return int
+ */
 static int gatt_svr_chr_access_device_info(uint16_t conn_handle,
                                            uint16_t attr_handle,
                                            struct ble_gatt_access_ctxt *ctxt,
@@ -96,6 +162,16 @@ static int gatt_svr_chr_access_device_info(uint16_t conn_handle,
 
   uuid = ble_uuid_u16(ctxt->chr->uuid);
 
+  if (uuid == GATT_FIRMWARE_REVISION_UUID)
+  {
+    rc = os_mbuf_append(ctxt->om, fw_ver, strlen(fw_ver));
+    return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+  }
+  if (uuid == GATT_HARDWARE_REVISION_UUID)
+  {
+    rc = os_mbuf_append(ctxt->om, hardware_num, strlen(hardware_num));
+    return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+  }
   if (uuid == GATT_MODEL_NUMBER_UUID)
   {
     rc = os_mbuf_append(ctxt->om, model_num, strlen(model_num));
@@ -110,8 +186,28 @@ static int gatt_svr_chr_access_device_info(uint16_t conn_handle,
 
   assert(0);
   return BLE_ATT_ERR_UNLIKELY;
-}
+} /**
+   *
+   *   ╔═══════════════════════════════════════════════════════════════════════════╗
+   * ╔═══════════════════════════════════════════════════════════════════════════════╗
+   * ║                                                                               ║
+   * ║  GATT SERVICE FUNTIONS                                                        ║
+   * ║                                                                               ║
+   * ╚═══════════════════════════════════════════════════════════════════════════════╝
+   *   ╚═══════════════════════════════════════════════════════════════════════════╝
+   *
+   */
 
+/**
+ * @brief Get client Write value from context
+ *
+ * @param om Buffer pointer
+ * @param min_len Minimum length
+ * @param max_len Maximum length
+ * @param dst Out copy destination
+ * @param len Out copy length
+ * @return int
+ */
 static int gatt_svr_chr_write(struct os_mbuf *om, uint16_t min_len,
                               uint16_t max_len, void *dst, uint16_t *len)
 {
@@ -133,6 +229,11 @@ static int gatt_svr_chr_write(struct os_mbuf *om, uint16_t min_len,
   return 0;
 }
 
+/**
+ * @brief Update OTA service
+ *
+ * @param conn_handle Connection handle
+ */
 static void update_ota_control(uint16_t conn_handle)
 {
   struct os_mbuf *om;
@@ -239,6 +340,27 @@ static void update_ota_control(uint16_t conn_handle)
   }
 }
 
+/**
+ *
+ *   ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ╔═══════════════════════════════════════════════════════════════════════════════╗
+ * ║                                                                               ║
+ * ║  OTA CALLBACKS                                                                ║
+ * ║                                                                               ║
+ * ╚═══════════════════════════════════════════════════════════════════════════════╝
+ *   ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ */
+
+/**
+ * @brief OTA Control characteristic callback
+ *
+ * @param conn_handle Connection handle
+ * @param attr_handle Attribute handle
+ * @param ctxt Context
+ * @param arg Arguments
+ * @return int
+ */
 static int gatt_svr_chr_ota_control_cb(uint16_t conn_handle,
                                        uint16_t attr_handle,
                                        struct ble_gatt_access_ctxt *ctxt,
@@ -276,6 +398,15 @@ static int gatt_svr_chr_ota_control_cb(uint16_t conn_handle,
   return BLE_ATT_ERR_UNLIKELY;
 }
 
+/**
+ * @brief OTA Data characteristic callback
+ *
+ * @param conn_handle Connection handle
+ * @param attr_handle Attribute handle
+ * @param ctxt Context
+ * @param arg Arguments
+ * @return int
+ */
 static int gatt_svr_chr_ota_data_cb(uint16_t conn_handle, uint16_t attr_handle,
                                     struct ble_gatt_access_ctxt *ctxt,
                                     void *arg)
@@ -303,6 +434,56 @@ static int gatt_svr_chr_ota_data_cb(uint16_t conn_handle, uint16_t attr_handle,
 
     num_pkgs_received++;
     ESP_LOGI(LOG_TAG_GATT_SVR, "Received packet %d", num_pkgs_received);
+  }
+
+  return rc;
+}
+
+/**
+ *
+ *   ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ╔═══════════════════════════════════════════════════════════════════════════════╗
+ * ║                                                                               ║
+ * ║  APP CALLBACKS                                                                ║
+ * ║                                                                               ║
+ * ╚═══════════════════════════════════════════════════════════════════════════════╝
+ *   ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ */
+
+/**
+ * @brief App characteristic callback
+ *
+ * @param conn_handle Connection handle
+ * @param attr_handle Attribute handle
+ * @param ctxt Context
+ * @param arg Arguments
+ * @return int
+ */
+static int gatt_svr_chr_app_cb(uint16_t conn_handle, uint16_t attr_handle,
+                               struct ble_gatt_access_ctxt *ctxt,
+                               void *arg)
+{
+  int rc = gatt_svr_chr_write(ctxt->om, 1, sizeof(gatt_svr_chr_app_data_val),
+                              gatt_svr_chr_app_data_val, NULL);
+
+  if (rc == 0)
+  {
+    esp_log_buffer_hex(LOG_TAG_GATT_SVR, gatt_svr_chr_app_data_val, 9);
+    uint8_t cmd = (uint8_t)gatt_svr_chr_app_data_val[0];
+    switch (cmd)
+    {
+    case 0xA0:
+      ESP_LOGI(LOG_TAG_GATT_SVR, "Command A0");
+
+      break;
+    case 0xB0:
+      ESP_LOGI(LOG_TAG_GATT_SVR, "Command B0");
+      break;
+    default:
+      ESP_LOGI("Command not found", "V1");
+      break;
+    }
   }
 
   return rc;

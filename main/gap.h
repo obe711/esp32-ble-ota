@@ -9,8 +9,6 @@
 
 #define LOG_TAG_GAP "gap"
 
-static const char device_name[] = "esp32OTA";
-
 void advertise();
 void reset_cb(int reason);
 void sync_cb(void);
